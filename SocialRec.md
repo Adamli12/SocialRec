@@ -284,9 +284,27 @@ Social connections 让 SID 模型获得冷启动能力 — 新 user 有 social l
 - [ ] loss_term=1 实验完成并测试
 - [ ] 网格搜索：λ ∈ {0.05, 0.1}, τ ∈ {0.07, 0.1}
 
+#### Yelp 实验结果（SupCon, τ=0.07, bs=256, loss_term=1）
+
+对比基线 TIGER (LETTER VANILLA RQVAE): **Hit@10=0.0387, NDCG@10=0.0202**
+
+| λ | Hit@5 | Hit@10 | NDCG@5 | NDCG@10 |
+|---|-------|--------|--------|---------|
+| 0 (基线) | 0.0245 | 0.0387 | 0.0156 | 0.0202 |
+| 0.00001 | 0.0242 | 0.0384 | 0.0158 | 0.0203 |
+| 0.0001 | 0.0239 | 0.0383 | 0.0155 | 0.0201 |
+| 0.001 | 0.0237 | 0.0374 | 0.0154 | 0.0198 |
+| 0.01 | 0.0237 | 0.0370 | 0.0153 | 0.0196 |
+| 0.05 | — | — | — | — |
+
+SupCon loss 权重过小时对模型无实质影响，随着 λ 增大效果持续下降，说明当前的 in-batch 对比学习方案（mean-pool encoder output + cosine social graph 正负例）引入的不是有益的社交监督信号，而是噪声，干扰了 NTP 主任务的优化方向。
+
 #### 扩展方向
 
-当前实现是最简单的版本（直接 mean-pool encoder output + in-batch 对比）。可能的改进：
+当前方案效果为负，可能原因及改进方向：
+- **[P0] 社交关系是 user 级别固定的，但 user_repr 是 sample 级别动态的**：同一 user 有多条截断序列，每条经过 encoder 得到不同的 user_repr。`torch.unique` 去重平均后得到的混合表示语义不一致，导致 social loss 梯度信号互相矛盾（A 的 repr₁ 被拉向 B 的 repr₁，A 的 repr₂ 被拉向 B 的 repr₂，但方向可能完全不同），本质上是在用噪声做监督
+- **[P1] in-batch 对比学习受限于 batch 内社交关系稀疏性**：50.8% 用户有社交关系，但 batch 内同时出现好友对的概率很低，大部分 step 的 social loss 梯度仅来自极少正例对，信号稀疏且噪声大
+- **[P2] mean-pool encoder output 丢失序列信息**：128d T5 encoder hidden state 的均值池化过于粗糙，无法区分不同行为模式的用户
 - [ ] 硬负例挖掘（non-friend 但行为相似的用户）
 - [ ] Graph Neural Network encoder 替代 mean-pool（如 LightGCN social encoder）
 - [ ] 多任务学习：social link prediction + item generation
